@@ -1,0 +1,12 @@
+{
+  "name": "latex-editor",
+  "version": "1.0.0",
+  "description": "A local web editor for LaTeX with compile-on-save, PDF preview, and SyncTeX",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "node start.js",
+    "stop": "node stop.js",
+    "test": "node --test test/synctex.test.js test/start_stop.test.js"
+  }
+}

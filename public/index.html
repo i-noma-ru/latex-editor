@@ -1,0 +1,2172 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LaTeX Editor</title>
+  <link rel="stylesheet" href="/vendor/codemirror.css">
+  <link rel="stylesheet" href="/vendor/dialog.css">
+  <link rel="stylesheet" href="/vendor/show-hint.css">
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #1f2937;
+      background: #f8fafc;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body { height: 100%; }
+
+    body {
+      min-width: 860px;
+      height: 100vh;
+      margin: 0;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+      overflow: hidden;
+    }
+
+    #workspace {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: var(--tree-w, 240px) minmax(300px, 1fr) 45%;
+      grid-template-rows: 2.55rem minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    #editor-header,
+    #preview-header {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      min-height: 0;
+      padding: 0.35rem 0.7rem;
+      border-bottom: 1px solid #cbd5e1;
+      background: #fff;
+    }
+
+    #editor-header {
+      grid-column: 1 / 3;
+      grid-row: 1;
+      gap: 0.9rem;
+      border-right: 1px solid #cbd5e1;
+    }
+
+    #preview-header {
+      grid-column: 3;
+      grid-row: 1;
+      gap: 0.35rem;
+      background: #f8fafc;
+    }
+
+    #file-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+
+    #status {
+      flex: 0 0 auto;
+      white-space: nowrap;
+      font-size: 0.82rem;
+    }
+
+    #status[data-state="saved"] { color: #15803d; }
+    #status[data-state="error"],
+    #status[data-state="conflict"] { color: #b91c1c; }
+    #status[data-state="dirty"],
+    #status[data-state="compiling"] { color: #a16207; }
+
+    .toolbar-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      padding: 0;
+      color: #334155;
+      cursor: pointer;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 0.3rem;
+    }
+
+    .toolbar-button:hover,
+    .toolbar-button:focus-visible,
+    .toolbar-button.is-active {
+      color: #1d4ed8;
+      background: #dbeafe;
+      border-color: #93c5fd;
+    }
+
+    .toolbar-button:disabled {
+      color: #94a3b8;
+      cursor: not-allowed;
+      background: transparent;
+      border-color: transparent;
+    }
+
+    /* SVG は HTML の hidden 属性で UA スタイルが効かないため明示する */
+    #copy-path .toolbar-icon[hidden] { display: none; }
+
+    #ext-update-banner {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.35rem 0.7rem;
+      font-size: 0.82rem;
+      color: #92400e;
+      background: #fef3c7;
+      border-bottom: 1px solid #fcd34d;
+    }
+
+    #ext-update-banner[hidden] { display: none; }
+
+    #ext-update-reload {
+      flex: 0 0 auto;
+      padding: 0.15rem 0.6rem;
+      font-size: 0.8rem;
+      color: #92400e;
+      cursor: pointer;
+      background: #fff;
+      border: 1px solid #fcd34d;
+      border-radius: 0.3rem;
+    }
+
+    #ext-update-reload:hover,
+    #ext-update-reload:focus-visible {
+      background: #fde68a;
+    }
+
+    .toolbar-icon {
+      width: 1.15rem;
+      height: 1.15rem;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.8;
+    }
+
+    #page-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      min-width: 5.5rem;
+      color: #334155;
+      font-size: 0.82rem;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    #page-indicator .toolbar-icon {
+      width: 1rem;
+      height: 1rem;
+    }
+
+    #download-pdf { margin-left: auto; }
+
+    .zoom-reset-button {
+      height: 2rem;
+      padding: 0 0.45rem;
+      color: #334155;
+      font-size: 0.78rem;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      cursor: pointer;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 0.3rem;
+    }
+
+    .zoom-reset-button:hover,
+    .zoom-reset-button:focus-visible {
+      color: #1d4ed8;
+      background: #dbeafe;
+      border-color: #93c5fd;
+    }
+
+    #tree-pane,
+    #editor-pane,
+    #preview-pane {
+      min-width: 0;
+      min-height: 0;
+    }
+
+    #tree-pane {
+      grid-column: 1;
+      grid-row: 2;
+      overflow: auto;
+      padding: 0.7rem;
+      border-right: 1px solid #cbd5e1;
+      background: #f1f5f9;
+    }
+
+    #tree-divider {
+      grid-column: 1;
+      grid-row: 2;
+      z-index: 2;
+      justify-self: end;
+      width: 7px;
+      cursor: col-resize;
+      background: transparent;
+    }
+
+    #tree-divider:hover,
+    #tree-divider.is-dragging { background: #94a3b8; }
+
+    #tree-toolbar {
+      display: flex;
+      gap: 0.35rem;
+      align-items: stretch;
+      margin: 0 0 0.6rem;
+    }
+
+    #root-select {
+      flex: 1 1 auto;
+      min-width: 0;
+      margin: 0;
+      padding: 0.3rem 0.4rem;
+      color: #1e293b;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 0.2rem;
+    }
+
+    #tree-reload {
+      flex: 0 0 auto;
+      padding: 0.3rem 0.5rem;
+      color: #1e293b;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 0.2rem;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+    }
+
+    #tree-reload:hover,
+    #tree-reload:focus-visible {
+      background: #e2e8f0;
+    }
+
+    #tree details { margin-left: 0.35rem; }
+    #tree summary { cursor: pointer; }
+
+    .tree-file {
+      display: block;
+      box-sizing: border-box;
+      width: 100%;
+      margin: 0.15rem 0;
+      padding: 0.2rem 0.35rem;
+      overflow: hidden;
+      color: #1e293b;
+      text-align: left;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+      background: transparent;
+      border: 0;
+      border-left: 3px solid transparent;
+      border-radius: 0.2rem;
+    }
+
+    .tree-file:hover,
+    .tree-file:focus-visible { background: #dbeafe; }
+
+    .tree-file.is-open {
+      color: #1e3a8a;
+      font-weight: 600;
+      background: #bfdbfe;
+      border-left-color: #2563eb;
+    }
+
+    #editor-pane {
+      grid-column: 2;
+      grid-row: 2;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid #cbd5e1;
+      background: #fff;
+    }
+
+    .CodeMirror {
+      flex: 1 1 auto;
+      min-height: 0;
+      height: auto;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 22px;
+    }
+
+    .CodeMirror .synctex-target-line { background: #fef3c7; }
+
+    /* 補完ポップアップ: エディタ本文（22px 等幅）に釣り合う大きさに広げる */
+    .CodeMirror-hints {
+      z-index: 30;
+      min-width: 16rem;
+      max-height: 26em;
+      padding: 0.25rem;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 20px;
+      border: 1px solid #94a3b8;
+      border-radius: 6px;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18);
+    }
+
+    .CodeMirror-hint {
+      padding: 0.15rem 0.6rem;
+      border-radius: 4px;
+      color: #1e293b;
+    }
+
+    li.CodeMirror-hint-active {
+      color: #fff;
+      background: #2563eb;
+    }
+
+    #preview-pane {
+      grid-column: 3;
+      grid-row: 2;
+      display: flex;
+      overflow: hidden;
+      background: #e2e8f0;
+    }
+
+    #thumbnail-sidebar {
+      flex: 0 0 9.3rem;
+      min-width: 0;
+      overflow: auto;
+      border-right: 1px solid #94a3b8;
+      background: #f8fafc;
+    }
+
+    #thumbnail-sidebar[hidden] { display: none; }
+
+    #thumbnail-list {
+      display: grid;
+      gap: 0.55rem;
+      padding: 0.6rem;
+    }
+
+    .thumbnail-button {
+      display: grid;
+      justify-items: center;
+      gap: 0.25rem;
+      width: 100%;
+      padding: 0.35rem;
+      color: #475569;
+      cursor: pointer;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 0.25rem;
+    }
+
+    .thumbnail-button:hover,
+    .thumbnail-button:focus-visible,
+    .thumbnail-button.is-current {
+      color: #1d4ed8;
+      border-color: #60a5fa;
+      box-shadow: 0 0 0 1px #bfdbfe;
+    }
+
+    .thumbnail-button canvas {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      box-shadow: 0 1px 2px rgb(15 23 42 / 18%);
+    }
+
+    .thumbnail-page-number { font-size: 0.72rem; }
+
+    #pdf-scroll {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      overflow: auto;
+      padding: 1rem;
+      background: #e2e8f0;
+      outline: none;
+    }
+
+    #pdf-scroll:focus-visible { box-shadow: inset 0 0 0 2px #3b82f6; }
+
+    #pdf-pages {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      width: max-content;
+      min-width: 100%;
+    }
+
+    .pdf-page-row {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 1rem;
+      width: 100%;
+    }
+
+    .pdf-page {
+      position: relative;
+      flex: 0 0 auto;
+      line-height: 0;
+      background: #fff;
+      box-shadow: 0 2px 6px rgb(15 23 42 / 28%);
+    }
+
+    .pdf-page canvas { display: block; }
+
+    /* 前方検索（Ctrl-Alt-J）の一時マーカー。クリック逆引きを妨げないよう pointer-events は無効 */
+    .synctex-forward-marker {
+      position: absolute;
+      z-index: 5;
+      background: rgb(252 211 77 / 38%);
+      border: 1px solid #f59e0b;
+      border-radius: 2px;
+      pointer-events: none;
+    }
+
+    .pdf-page-placeholder {
+      width: 100%;
+      height: 100%;
+      background: #fff;
+    }
+
+    #statusbar {
+      position: relative;
+      display: flex;
+      align-items: center;
+      min-height: 2.2rem;
+      padding: 0.35rem 0.9rem;
+      font-size: 0.82rem;
+      border-top: 1px solid #cbd5e1;
+      background: #fff;
+    }
+
+    #hover-tip {
+      position: fixed;
+      z-index: 60;
+      max-width: 70vw;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.78rem;
+      color: #f8fafc;
+      background: #334155;
+      border-radius: 4px;
+      pointer-events: none;
+      white-space: nowrap;
+      box-shadow: 0 2px 8px rgb(15 23 42 / 25%);
+    }
+
+    #synctex-toast {
+      position: fixed;
+      z-index: 70;
+      right: 1rem;
+      bottom: 3rem;
+      max-width: min(28rem, calc(100vw - 2rem));
+      padding: 0.45rem 0.7rem;
+      color: #78350f;
+      font-size: 0.82rem;
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      border-radius: 0.3rem;
+      box-shadow: 0 3px 10px rgb(15 23 42 / 18%);
+    }
+
+    #synctex-toast[hidden] { display: none; }
+
+    #attribution {
+      margin-left: auto;
+      color: #64748b;
+      font-size: 0.72rem;
+      white-space: nowrap;
+    }
+  </style>
+  <script defer src="/vendor/codemirror.js"></script>
+  <script defer src="/vendor/show-hint.js"></script>
+  <script defer src="/vendor/stex.js"></script>
+  <script defer src="/vendor/comment.js"></script>
+  <script defer src="/vendor/dialog.js"></script>
+  <script defer src="/vendor/searchcursor.js"></script>
+  <script defer src="/vendor/search.js"></script>
+  <script defer src="/vendor/jump-to-line.js"></script>
+</head>
+<body>
+  <main id="workspace">
+    <div id="editor-header">
+      <span id="file-name">ファイルを選択</span>
+      <button
+        id="copy-path"
+        class="toolbar-button"
+        type="button"
+        aria-label="ファイルパスをコピー"
+        title="ファイルパスをコピー"
+        disabled
+      >
+        <svg id="copy-path-icon" class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <rect x="9" y="9" width="11" height="12" rx="1"></rect>
+          <path d="M5 15H4V4a1 1 0 0 1 1-1h10v1"></path>
+        </svg>
+        <svg id="copy-done-icon" class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" hidden>
+          <path d="m5 13 4 4L19 7"></path>
+        </svg>
+      </button>
+      <button
+        id="reload-file"
+        class="toolbar-button"
+        type="button"
+        aria-label="ファイルを再読込してコンパイル"
+        title="ファイルを再読込してコンパイル（他の場所での更新を取り込む）"
+        disabled
+      >
+        <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M20 11a8 8 0 1 0-2.34 6.34"></path>
+          <path d="M20 5v6h-6"></path>
+        </svg>
+      </button>
+      <span id="status" data-state="idle">● 待機中</span>
+    </div>
+
+    <div id="preview-header">
+      <button
+        id="thumbnail-toggle"
+        class="toolbar-button"
+        type="button"
+        aria-label="サムネイルを開く"
+        aria-pressed="false"
+        title="サムネイルを開く"
+      >
+        <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M4 6h16M4 12h16M4 18h16"></path>
+        </svg>
+      </button>
+      <div id="page-indicator" role="status" aria-label="現在のページ" title="現在のページ">
+        <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M6 3.5h9l3 3V20.5H6z"></path>
+          <path d="M15 3.5v3h3"></path>
+        </svg>
+        <span id="page-count">— / —</span>
+      </div>
+      <button
+        id="spread-toggle"
+        class="toolbar-button"
+        type="button"
+        aria-label="見開き表示に切り替え"
+        aria-pressed="false"
+        title="見開き表示に切り替え"
+      >
+        <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M4 5.5h6.5c1 0 1.5.5 1.5 1.5v12c0-1-1-1.5-2-1.5H4z"></path>
+          <path d="M20 5.5h-6.5C12.5 5.5 12 6 12 7v12c0-1 1-1.5 2-1.5H20z"></path>
+        </svg>
+      </button>
+      <button
+        id="zoom-out"
+        class="toolbar-button"
+        type="button"
+        aria-label="PDFを縮小"
+        title="PDFを縮小"
+      >
+        <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M5 12h14"></path>
+        </svg>
+      </button>
+      <button
+        id="zoom-in"
+        class="toolbar-button"
+        type="button"
+        aria-label="PDFを拡大"
+        title="PDFを拡大"
+      >
+        <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 5v14M5 12h14"></path>
+        </svg>
+      </button>
+      <button
+        id="zoom-reset"
+        class="zoom-reset-button"
+        type="button"
+        aria-label="幅フィットに戻す"
+        title="幅フィットに戻す"
+        hidden
+      >100%</button>
+      <button
+        id="download-pdf"
+        class="toolbar-button"
+        type="button"
+        aria-label="PDFをダウンロード"
+        title="PDFをダウンロード"
+        disabled
+      >
+        <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 3v12"></path>
+          <path d="m7.5 10.5 4.5 4.5 4.5-4.5"></path>
+          <path d="M5 20h14"></path>
+        </svg>
+      </button>
+    </div>
+
+    <aside id="tree-pane">
+      <div id="tree-toolbar">
+        <select id="root-select" aria-label="表示するフォルダ">
+          <option value="">（すべて）</option>
+        </select>
+        <button id="tree-reload" type="button" title="ファイル一覧を再読込" aria-label="ファイル一覧を再読込">&#x21bb;</button>
+      </div>
+      <div id="tree" aria-label="ファイルツリー">読み込み中...</div>
+    </aside>
+
+    <div id="tree-divider" role="separator" aria-orientation="vertical" aria-label="ファイルツリーの幅を変更"></div>
+
+    <section id="editor-pane" aria-label="ソースエディタ">
+      <div id="ext-update-banner" role="status" hidden>
+        <span>このファイルは外部（別の PC・エディタ等）で更新されました</span>
+        <button id="ext-update-reload" type="button">再読込してコンパイル</button>
+      </div>
+      <textarea id="source" aria-label="LaTeX ソース" spellcheck="false"></textarea>
+    </section>
+
+    <section id="preview-pane" aria-label="PDF プレビュー">
+      <aside id="thumbnail-sidebar" aria-label="PDF サムネイル" hidden>
+        <div id="thumbnail-list"></div>
+      </aside>
+      <div id="pdf-scroll" tabindex="0" aria-label="PDF ページ一覧">
+        <div id="pdf-pages"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="statusbar">
+    <span id="attribution">Editor: CodeMirror 5 (MIT) · PDF: PDF.js (Apache-2.0)</span>
+  </div>
+  <div id="synctex-toast" role="status" aria-live="polite" hidden></div>
+
+  <script type="module">
+    import * as pdfjsLib from "/vendor/pdf.min.mjs";
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "/vendor/pdf.worker.min.mjs";
+    window.pdfjsLib = pdfjsLib;
+  </script>
+  <script>
+    "use strict";
+
+    let cm;
+    let current = null;
+    let dirty = false;
+    let settingValue = false;
+    let saving = false;
+    let tree;
+    let rootSelect;
+    let treeData = [];
+    let fileName;
+    let copyPathButton;
+    let reloadFileButton;
+    let extUpdateBanner;
+    let status;
+    let thumbnailToggle;
+    let thumbnailSidebar;
+    let thumbnailList;
+    let pdfScroll;
+    let pdfPages;
+    let pageIndicator;
+    let pageCount;
+    let spreadToggle;
+    let zoomOutButton;
+    let zoomInButton;
+    let zoomResetButton;
+    let downloadButton;
+    let workspace;
+    let treePane;
+    let treeDivider;
+    let pdfDocument = null;
+    let pdfUrl = null;
+    let pdfBuildPath = null;
+    let pdfFilename = null;
+    let currentPage = 0;
+    let currentRowPages = [];
+    let totalPages = 0;
+    let sidebarOpen = false;
+    let spreadMode = false;
+    let pdfZoom = 100;
+    let renderToken = 0;
+    let pageObserver = null;
+    const activeRenderTasks = new Map();
+    let thumbnailCacheToken = 0;
+    let pdfLoadToken = 0;
+    let resizeTimer = null;
+    let scrollFrame = null;
+    let savePending = false;
+    let pageRenderRequest = 0;
+    let thumbnailRenderRequest = 0;
+    let synctexToast;
+    let synctexToastTimer = null;
+    let synctexHighlight = null;
+    let synctexHighlightTimer = null;
+    let synctexMarker = null;
+    let synctexMarkerTimer = null;
+    let pdfPointerDown = null;
+
+    const MIN_PDF_ZOOM = 50;
+    const MAX_PDF_ZOOM = 300;
+    const PDF_ZOOM_STEP = 10;
+
+    const TEX_COMMANDS = [
+      { text: "frac", args: 2 },
+      { text: "dfrac", args: 2 },
+      { text: "tfrac", args: 2 },
+      { text: "sqrt", args: 1 },
+      { text: "overline", args: 1 },
+      { text: "underline", args: 1 },
+      { text: "bar", args: 1 },
+      { text: "vec", args: 1 },
+      { text: "hat", args: 1 },
+      { text: "dot", args: 1 },
+      { text: "overset", args: 2 },
+      { text: "underset", args: 2 },
+      { text: "boxed", args: 1 },
+      { text: "substack", args: 1 },
+      { text: "begin", args: 1 },
+      { text: "end", args: 1 },
+      { text: "left", args: 0 },
+      { text: "right", args: 0 },
+      { text: "text", args: 1 },
+      { text: "mathrm", args: 1 },
+      { text: "mathbf", args: 1 },
+      { text: "mathbb", args: 1 },
+      { text: "mathit", args: 1 },
+      { text: "mathsf", args: 1 },
+      { text: "mathtt", args: 1 },
+      { text: "operatorname", args: 1 },
+      { text: "displaystyle", args: 0 },
+      { text: "quad", args: 0 },
+      { text: "qquad", args: 0 },
+      { text: "hspace", args: 1 },
+      { text: "vspace", args: 1 },
+      { text: "\\", args: 0 },
+      { text: "times", args: 0 },
+      { text: "div", args: 0 },
+      { text: "pm", args: 0 },
+      { text: "mp", args: 0 },
+      { text: "cdot", args: 0 },
+      { text: "cdots", args: 0 },
+      { text: "dots", args: 0 },
+      { text: "ldots", args: 0 },
+      { text: "leq", args: 0 },
+      { text: "geq", args: 0 },
+      { text: "neq", args: 0 },
+      { text: "fallingdotseq", args: 0 },
+      { text: "approx", args: 0 },
+      { text: "equiv", args: 0 },
+      { text: "propto", args: 0 },
+      { text: "infty", args: 0 },
+      { text: "angle", args: 0 },
+      { text: "perp", args: 0 },
+      { text: "parallel", args: 0 },
+      { text: "triangle", args: 0 },
+      { text: "degree", args: 0 },
+      { text: "sim", args: 0 },
+      { text: "cong", args: 0 },
+      { text: "lt", args: 0 },
+      { text: "gt", args: 0 },
+      { text: "in", args: 0 },
+      { text: "notin", args: 0 },
+      { text: "subset", args: 0 },
+      { text: "subseteq", args: 0 },
+      { text: "supset", args: 0 },
+      { text: "supseteq", args: 0 },
+      { text: "cup", args: 0 },
+      { text: "cap", args: 0 },
+      { text: "setminus", args: 0 },
+      { text: "emptyset", args: 0 },
+      { text: "forall", args: 0 },
+      { text: "exists", args: 0 },
+      { text: "neg", args: 0 },
+      { text: "land", args: 0 },
+      { text: "lor", args: 0 },
+      { text: "therefore", args: 0 },
+      { text: "because", args: 0 },
+      { text: "Leftrightarrow", args: 0 },
+      { text: "Rightarrow", args: 0 },
+      { text: "Leftarrow", args: 0 },
+      { text: "to", args: 0 },
+      { text: "mapsto", args: 0 },
+      { text: "sum", args: 0 },
+      { text: "prod", args: 0 },
+      { text: "int", args: 0 },
+      { text: "iint", args: 0 },
+      { text: "lim", args: 0 },
+      { text: "log", args: 0 },
+      { text: "ln", args: 0 },
+      { text: "exp", args: 0 },
+      { text: "sin", args: 0 },
+      { text: "cos", args: 0 },
+      { text: "tan", args: 0 },
+      { text: "max", args: 0 },
+      { text: "min", args: 0 },
+      { text: "binom", args: 2 },
+      { text: "combi", args: 0 },
+      { text: "alpha", args: 0 },
+      { text: "beta", args: 0 },
+      { text: "gamma", args: 0 },
+      { text: "delta", args: 0 },
+      { text: "theta", args: 0 },
+      { text: "lambda", args: 0 },
+      { text: "mu", args: 0 },
+      { text: "pi", args: 0 },
+      { text: "sigma", args: 0 },
+      { text: "phi", args: 0 },
+      { text: "omega", args: 0 },
+      { text: "Delta", args: 0 },
+      { text: "Sigma", args: 0 },
+      { text: "Omega", args: 0 },
+      { text: "varphi", args: 0 },
+      { text: "varepsilon", args: 0 },
+      { text: "section", args: 1 },
+      { text: "subsection", args: 1 },
+      { text: "item", args: 0 },
+      { text: "documentclass", args: 1 },
+      { text: "usepackage", args: 1 },
+      { text: "input", args: 1 },
+      { text: "include", args: 1 },
+      { text: "label", args: 1 },
+      { text: "ref", args: 1 },
+      { text: "caption", args: 1 },
+      { text: "centering", args: 0 },
+      { text: "newpage", args: 0 },
+      { text: "noindent", args: 0 },
+      { text: "par", args: 0 },
+      { text: "hline", args: 0 },
+      { text: "multicolumn", args: 3 },
+      { text: "includegraphics", args: 1 },
+    ];
+
+    const TEX_ENVIRONMENTS = [
+      "equation", "align", "aligned", "array", "cases", "center", "figure", "table",
+      "tabular", "itemize", "enumerate", "minipage", "tikzpicture", "pmatrix", "bmatrix", "vmatrix",
+    ];
+
+    const STATUS_TEXT = {
+      idle: "● 待機中",
+      loading: "⟳ 読み込み中",
+      dirty: "● 未保存",
+      compiling: "⟳ コンパイル中",
+      saved: "✓ 保存済み",
+      error: "⚠️ コンパイル失敗",
+      conflict: "⚠️ 他で更新されています",
+    };
+
+    function getTexHintContext(editor) {
+      const cursor = editor.getCursor();
+      const beforeCursor = editor.getLine(cursor.line).slice(0, cursor.ch);
+      const environmentMatch = beforeCursor.match(/\\(?:begin|end)\{([A-Za-z*]*)$/);
+      if (environmentMatch) {
+        return {
+          kind: "environment",
+          prefix: environmentMatch[1],
+          from: CodeMirror.Pos(cursor.line, cursor.ch - environmentMatch[1].length),
+          to: cursor,
+        };
+      }
+
+      const commandMatch = beforeCursor.match(/\\([A-Za-z]*)$/);
+      if (!commandMatch) return null;
+      return {
+        kind: "command",
+        prefix: commandMatch[1],
+        from: CodeMirror.Pos(cursor.line, cursor.ch - commandMatch[0].length),
+        to: cursor,
+      };
+    }
+
+    function getBufferWithoutCurrentCommand(editor, context) {
+      const value = editor.getValue();
+      if (context.kind !== "command") return value;
+      const fromIndex = editor.indexFromPos(context.from);
+      const toIndex = editor.indexFromPos(context.to);
+      return value.slice(0, fromIndex) + value.slice(toIndex);
+    }
+
+    function collectTexCommands(editor, context) {
+      const commandsByName = new Map(TEX_COMMANDS.map((command) => [command.text, command]));
+      const commandPattern = /\\([A-Za-z]{2,})/g;
+      const buffer = getBufferWithoutCurrentCommand(editor, context);
+      let match;
+      while ((match = commandPattern.exec(buffer)) !== null) {
+        if (!commandsByName.has(match[1])) {
+          commandsByName.set(match[1], { text: match[1], args: 0 });
+        }
+      }
+      return Array.from(commandsByName.values());
+    }
+
+    function collectTexEnvironments(editor) {
+      const environments = new Set(TEX_ENVIRONMENTS);
+      const environmentPattern = /\\begin\{([A-Za-z*]+)\}/g;
+      let match;
+      while ((match = environmentPattern.exec(editor.getValue())) !== null) {
+        environments.add(match[1]);
+      }
+      return Array.from(environments);
+    }
+
+    function sortTexCandidates(candidates, prefix) {
+      return candidates
+        .filter((candidate) => candidate.text.startsWith(prefix))
+        .sort((a, b) => {
+          if (a.text === prefix && b.text !== prefix) return -1;
+          if (b.text === prefix && a.text !== prefix) return 1;
+          return a.text.localeCompare(b.text, "en");
+        });
+    }
+
+    function createCommandHint(command) {
+      const commandText = "\\" + command.text;
+      return {
+        text: commandText,
+        displayText: commandText,
+        hint(editor, data, item) {
+          const argCount = command.args || 0;
+          const insertedText = item.text + "{}".repeat(argCount);
+          editor.replaceRange(insertedText, data.from, data.to, "complete");
+          const cursorCh = data.from.ch + item.text.length + (argCount > 0 ? 1 : 0);
+          editor.setCursor(CodeMirror.Pos(data.from.line, cursorCh));
+        },
+      };
+    }
+
+    function createEnvironmentHint(environment) {
+      return {
+        text: environment,
+        displayText: environment,
+        hint(editor, data, item) {
+          const insertedText = item.text + "}";
+          editor.replaceRange(insertedText, data.from, data.to, "complete");
+          editor.setCursor(CodeMirror.Pos(data.from.line, data.from.ch + insertedText.length));
+        },
+      };
+    }
+
+    function texHint(editor) {
+      const context = getTexHintContext(editor);
+      const cursor = editor.getCursor();
+      if (!context) return { list: [], from: cursor, to: cursor };
+
+      const candidates = context.kind === "environment"
+        ? sortTexCandidates(
+          collectTexEnvironments(editor).map((text) => ({ text })),
+          context.prefix,
+        ).map((environment) => createEnvironmentHint(environment.text))
+        : sortTexCandidates(collectTexCommands(editor, context), context.prefix).map(createCommandHint);
+
+      return { list: candidates, from: context.from, to: context.to };
+    }
+
+    function showTexHint(editor) {
+      editor.showHint({ hint: texHint, completeSingle: false });
+    }
+
+    function setStatus(state) {
+      status.dataset.state = state;
+      status.textContent = STATUS_TEXT[state] || STATUS_TEXT.idle;
+    }
+
+    // コンパイルログのパネルは置かない。
+    // 失敗は「● エラー」の状態表示で分かる。本文は開発者コンソールにだけ残す。
+    function clearLog() {}
+
+    function showLog(text) {
+      if (text && text.trim()) console.error(text);
+    }
+
+    function showSynctexToast(message) {
+      if (!synctexToast || !message) return;
+      synctexToast.textContent = message;
+      synctexToast.hidden = false;
+      if (synctexToastTimer) window.clearTimeout(synctexToastTimer);
+      synctexToastTimer = window.setTimeout(() => {
+        synctexToast.hidden = true;
+        synctexToastTimer = null;
+      }, 3500);
+    }
+
+    function clearSynctexHighlight() {
+      if (synctexHighlight) {
+        cm.removeLineClass(synctexHighlight.line, "background", "synctex-target-line");
+        synctexHighlight = null;
+      }
+      if (synctexHighlightTimer) {
+        window.clearTimeout(synctexHighlightTimer);
+        synctexHighlightTimer = null;
+      }
+    }
+
+    function jumpToSynctexLine(line) {
+      const lineIndex = line - 1;
+      if (!Number.isInteger(lineIndex) || lineIndex < 0 || lineIndex >= cm.lineCount()) {
+        showSynctexToast("移動先の行を開けませんでした");
+        return;
+      }
+      clearSynctexHighlight();
+      cm.setCursor({ line: lineIndex, ch: 0 });
+      const scroller = cm.getScrollerElement();
+      const top = cm.charCoords({ line: lineIndex, ch: 0 }, "local").top;
+      cm.scrollTo(null, Math.max(0, top - scroller.clientHeight / 2));
+      cm.addLineClass(lineIndex, "background", "synctex-target-line");
+      synctexHighlight = { rel: current && current.rel, line: lineIndex };
+      synctexHighlightTimer = window.setTimeout(() => {
+        clearSynctexHighlight();
+      }, 1500);
+      cm.focus();
+    }
+
+    function setPageDisplay() {
+      if (!totalPages) {
+        pageCount.textContent = "— / —";
+        pageIndicator.setAttribute("aria-label", "現在のページ");
+        pageIndicator.title = "現在のページ";
+        return;
+      }
+      const displayedPage = Math.min(Math.max(currentPage || 1, 1), totalPages);
+      pageCount.textContent = `${displayedPage} / ${totalPages}`;
+      pageIndicator.setAttribute("aria-label", `現在のページ ${displayedPage} / ${totalPages}`);
+      pageIndicator.title = `現在のページ ${displayedPage} / ${totalPages}`;
+    }
+
+    function updateThumbnailSelection() {
+      const selectedPages = new Set(currentRowPages.length ? currentRowPages : [currentPage]);
+      for (const button of thumbnailList.querySelectorAll("[data-page]")) {
+        button.classList.toggle("is-current", selectedPages.has(Number(button.dataset.page)));
+      }
+    }
+
+    function updateSidebarToggle() {
+      thumbnailSidebar.hidden = !sidebarOpen;
+      thumbnailToggle.classList.toggle("is-active", sidebarOpen);
+      thumbnailToggle.setAttribute("aria-pressed", String(sidebarOpen));
+      const label = sidebarOpen ? "サムネイルを閉じる" : "サムネイルを開く";
+      thumbnailToggle.setAttribute("aria-label", label);
+      thumbnailToggle.title = label;
+    }
+
+    function updateSpreadToggle() {
+      spreadToggle.classList.toggle("is-active", spreadMode);
+      spreadToggle.setAttribute("aria-pressed", String(spreadMode));
+      const label = spreadMode ? "見開き表示を解除" : "見開き表示に切り替え";
+      spreadToggle.setAttribute("aria-label", label);
+      spreadToggle.title = label;
+    }
+
+    function updatePdfZoomControls() {
+      const zoomLabel = `${pdfZoom}%`;
+      zoomOutButton.disabled = pdfZoom <= MIN_PDF_ZOOM;
+      zoomInButton.disabled = pdfZoom >= MAX_PDF_ZOOM;
+      zoomResetButton.hidden = pdfZoom === 100;
+      zoomResetButton.textContent = zoomLabel;
+      zoomResetButton.setAttribute("aria-label", `${zoomLabel}。幅フィットに戻す`);
+      zoomResetButton.title = "幅フィットに戻す";
+    }
+
+    function updateDownloadAvailability() {
+      downloadButton.disabled = !pdfUrl;
+    }
+
+    const TREE_MIN_WIDTH = 240;
+    const TREE_WIDTH_KEY = "latex-editor:tree-width";
+
+    // プレビュー45%を引いた残りから、エディタの最小幅300pxを確保できるところまでを上限にする
+    function treeMaxWidth() {
+      const workspaceWidth = workspace.getBoundingClientRect().width;
+      return Math.max(TREE_MIN_WIDTH, workspaceWidth * 0.55 - 300);
+    }
+
+    function applyTreeWidth(width) {
+      const clamped = Math.round(Math.min(Math.max(width, TREE_MIN_WIDTH), treeMaxWidth()));
+      workspace.style.setProperty("--tree-w", clamped + "px");
+      return clamped;
+    }
+
+    function resizeTreePane(event) {
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = treePane.getBoundingClientRect().width;
+      treeDivider.classList.add("is-dragging");
+      const onMove = (moveEvent) => {
+        applyTreeWidth(startWidth + moveEvent.clientX - startX);
+      };
+      const onUp = () => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        treeDivider.classList.remove("is-dragging");
+        try {
+          window.localStorage.setItem(TREE_WIDTH_KEY, String(treePane.getBoundingClientRect().width));
+        } catch (error) {
+          // localStorage が使えない環境では幅を記憶しないだけ
+        }
+      };
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    }
+
+    function restoreTreeWidth() {
+      let stored = null;
+      try {
+        stored = window.localStorage.getItem(TREE_WIDTH_KEY);
+      } catch (error) {
+        stored = null;
+      }
+      const width = Number(stored);
+      if (Number.isFinite(width) && width > 0) applyTreeWidth(width);
+    }
+
+    function detectLineSeparator(content) {
+      const match = content.match(/\r\n|\n|\r/);
+      return match ? match[0] : "\n";
+    }
+
+    function createTreeNode(node) {
+      if (node.type === "dir") {
+        const details = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = node.name;
+        details.append(summary);
+        const children = document.createElement("div");
+        for (const child of node.children) children.append(createTreeNode(child));
+        details.append(children);
+        return details;
+      }
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "tree-file";
+      button.dataset.rel = node.rel;
+      button.textContent = node.name;
+      return button;
+    }
+
+    function renderTree(nodes) {
+      const fragment = document.createDocumentFragment();
+      for (const node of nodes) fragment.append(createTreeNode(node));
+      tree.replaceChildren(fragment);
+      updateOpenTreeFile();
+    }
+
+    // ツリーの rel は readdir の名前（macOS では NFD のことがある）、逆引きの rel は常に NFC。
+    // 比べるときだけ NFC へそろえる。API へ渡す current.rel はディスクの形のまま変えない。
+    function sameRel(a, b) {
+      return typeof a === "string" && typeof b === "string" && a.normalize("NFC") === b.normalize("NFC");
+    }
+
+    function updateOpenTreeFile() {
+      const openRel = current ? current.rel : null;
+      for (const button of tree.querySelectorAll(".tree-file")) {
+        button.classList.toggle("is-open", sameRel(button.dataset.rel, openRel));
+      }
+    }
+
+    function populateRootSelect() {
+      const fragment = document.createDocumentFragment();
+      const allOption = document.createElement("option");
+      allOption.value = "";
+      allOption.textContent = "（すべて）";
+      fragment.append(allOption);
+      for (const node of treeData) {
+        if (node.type !== "dir") continue;
+        const option = document.createElement("option");
+        option.value = node.name;
+        option.textContent = node.name;
+        fragment.append(option);
+      }
+      rootSelect.replaceChildren(fragment);
+      // 再読込時は直前の選択フォルダを維持する（消えていたら「すべて」へ）
+      const prev = rootSelect.dataset.prevValue || "";
+      rootSelect.value = Array.from(rootSelect.options).some((o) => o.value === prev) ? prev : "";
+    }
+
+    function renderSelectedTree() {
+      if (!rootSelect.value) {
+        renderTree(treeData);
+        return;
+      }
+      const selectedRoot = treeData.find((node) => node.type === "dir" && node.name === rootSelect.value);
+      renderTree(selectedRoot ? selectedRoot.children : []);
+    }
+
+    async function loadTree() {
+      try {
+        rootSelect.dataset.prevValue = rootSelect.value;
+        const response = await fetch("/api/tree");
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.reason || "tree の取得に失敗しました。");
+        treeData = data.tree;
+        populateRootSelect();
+        renderSelectedTree();
+      } catch (error) {
+        tree.textContent = "ファイルツリーを読み込めませんでした。";
+        showLog(String(error));
+        setStatus("error");
+      }
+    }
+
+    function getPageGroups(pageTotal) {
+      if (!spreadMode) {
+        return Array.from({ length: pageTotal }, (_, index) => [index + 1]);
+      }
+      const groups = [];
+      for (let pageNumber = 1; pageNumber <= pageTotal; pageNumber += 2) {
+        groups.push(pageNumber + 1 <= pageTotal ? [pageNumber, pageNumber + 1] : [pageNumber]);
+      }
+      return groups;
+    }
+
+    function isRenderingCancelled(error) {
+      return error && (
+        error.name === "RenderingCancelledException" ||
+        String(error).includes("RenderingCancelledException")
+      );
+    }
+
+    function isCurrentRenderGeneration(documentForRender, token) {
+      return token === renderToken && documentForRender === pdfDocument;
+    }
+
+    function trackRenderTask(task, metadata) {
+      activeRenderTasks.set(task, metadata);
+      const removeTask = () => activeRenderTasks.delete(task);
+      task.promise.then(removeTask, removeTask);
+      return task;
+    }
+
+    async function cancelActiveRenderTasks() {
+      const tasks = Array.from(activeRenderTasks.keys());
+      for (const task of tasks) {
+        try {
+          task.cancel();
+        } catch (_) {
+          // すでに完了済みのタスクは無視する。
+        }
+      }
+      await Promise.allSettled(tasks.map((task) => task.promise));
+    }
+
+    function cancelRenderTasksForPage(pageElement) {
+      for (const [task, metadata] of activeRenderTasks) {
+        if (metadata.pageElement !== pageElement) continue;
+        try {
+          task.cancel();
+        } catch (_) {
+          // すでに完了済みのタスクは無視する。
+        }
+      }
+    }
+
+    function createPagePlaceholder() {
+      const placeholder = document.createElement("div");
+      placeholder.className = "pdf-page-placeholder";
+      placeholder.setAttribute("aria-hidden", "true");
+      return placeholder;
+    }
+
+    function ensurePagePlaceholder(pageElement) {
+      let placeholder = pageElement.querySelector(".pdf-page-placeholder");
+      if (!placeholder) {
+        placeholder = createPagePlaceholder();
+        pageElement.append(placeholder);
+      }
+      return placeholder;
+    }
+
+    function releasePageCanvas(pageElement) {
+      cancelRenderTasksForPage(pageElement);
+      const canvas = pageElement.querySelector("canvas");
+      if (canvas) {
+        canvas.width = 0;
+        canvas.height = 0;
+        canvas.replaceWith(createPagePlaceholder());
+      } else {
+        ensurePagePlaceholder(pageElement);
+      }
+      pageElement.dataset.renderState = "placeholder";
+      delete pageElement.dataset.renderRequest;
+    }
+
+    function releaseRowCanvases(row) {
+      for (const pageElement of row.querySelectorAll(".pdf-page")) {
+        releasePageCanvas(pageElement);
+      }
+    }
+
+    function releaseAllPageCanvases() {
+      for (const pageElement of pdfPages.querySelectorAll(".pdf-page")) {
+        releasePageCanvas(pageElement);
+      }
+    }
+
+    async function beginRenderGeneration() {
+      clearSynctexMarker();
+      const token = ++renderToken;
+      if (pageObserver) {
+        pageObserver.disconnect();
+        pageObserver = null;
+      }
+      const cancelledTasks = cancelActiveRenderTasks();
+      releaseAllPageCanvases();
+      await cancelledTasks;
+      for (const button of thumbnailList.querySelectorAll("[data-page]")) {
+        if (button.dataset.thumbnailState === "rendering") releaseThumbnailCanvas(button);
+      }
+      return token;
+    }
+
+    function getViewportForWidth(page, maxCssWidth, zoomPercent = 100) {
+      const originalViewport = page.getViewport({ scale: 1 });
+      const cssScale = Math.max(0.1, maxCssWidth / originalViewport.width) * (zoomPercent / 100);
+      return page.getViewport({ scale: cssScale });
+    }
+
+    async function renderPageCanvas(page, canvas, viewport, metadata) {
+      const outputScale = Math.max(1, window.devicePixelRatio || 1);
+      canvas.width = Math.ceil(viewport.width * outputScale);
+      canvas.height = Math.ceil(viewport.height * outputScale);
+      canvas.style.width = `${viewport.width}px`;
+      canvas.style.height = `${viewport.height}px`;
+      const context = canvas.getContext("2d", { alpha: false });
+      if (!context) throw new Error("PDF canvas の初期化に失敗しました。");
+      const task = trackRenderTask(page.render({
+        canvasContext: context,
+        viewport,
+        transform: [outputScale, 0, 0, outputScale, 0, 0],
+      }), metadata);
+      await task.promise;
+    }
+
+    function createThumbnailButton(pageNumber) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "thumbnail-button";
+      button.dataset.page = String(pageNumber);
+      button.setAttribute("aria-label", `${pageNumber}ページへ移動`);
+      button.title = `${pageNumber}ページへ移動`;
+      button.dataset.thumbnailState = "placeholder";
+      const pageNumberLabel = document.createElement("span");
+      pageNumberLabel.className = "thumbnail-page-number";
+      pageNumberLabel.textContent = `${pageNumber}`;
+      button.append(pageNumberLabel);
+      return button;
+    }
+
+    function resetThumbnailCache(pageTotal) {
+      thumbnailCacheToken += 1;
+      for (const canvas of thumbnailList.querySelectorAll("canvas")) {
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+      const fragment = document.createDocumentFragment();
+      for (let pageNumber = 1; pageNumber <= pageTotal; pageNumber += 1) {
+        fragment.append(createThumbnailButton(pageNumber));
+      }
+      thumbnailList.replaceChildren(fragment);
+      updateThumbnailSelection();
+    }
+
+    function releaseThumbnailCanvas(button, canvas = button.querySelector("canvas")) {
+      if (canvas) {
+        canvas.width = 0;
+        canvas.height = 0;
+        canvas.remove();
+      }
+      button.dataset.thumbnailState = "placeholder";
+      delete button.dataset.thumbnailRequest;
+    }
+
+    function isCurrentThumbnailRendering(documentForRender, token, cacheToken) {
+      return sidebarOpen &&
+        cacheToken === thumbnailCacheToken &&
+        isCurrentRenderGeneration(documentForRender, token);
+    }
+
+    async function renderThumbnail(button, documentForRender, token, cacheToken) {
+      if (button.dataset.thumbnailState !== "placeholder") return;
+      if (!isCurrentThumbnailRendering(documentForRender, token, cacheToken)) return;
+
+      const request = String(++thumbnailRenderRequest);
+      button.dataset.thumbnailState = "rendering";
+      button.dataset.thumbnailRequest = request;
+      let canvas = null;
+      try {
+        const page = await documentForRender.getPage(Number(button.dataset.page));
+        if (!isCurrentThumbnailRendering(documentForRender, token, cacheToken) ||
+            button.dataset.thumbnailState !== "rendering" ||
+            button.dataset.thumbnailRequest !== request) return;
+
+        const viewport = getViewportForWidth(page, 112);
+        canvas = document.createElement("canvas");
+        canvas.setAttribute("aria-hidden", "true");
+        const pageNumberLabel = button.querySelector(".thumbnail-page-number");
+        button.insertBefore(canvas, pageNumberLabel);
+        await renderPageCanvas(page, canvas, viewport, {
+          documentForRender,
+          token,
+          thumbnailButton: button,
+        });
+
+        if (!isCurrentThumbnailRendering(documentForRender, token, cacheToken) ||
+            button.dataset.thumbnailRequest !== request) {
+          if (button.dataset.thumbnailRequest !== request) return;
+          releaseThumbnailCanvas(button, canvas);
+          return;
+        }
+        button.dataset.thumbnailState = "rendered";
+      } catch (error) {
+        if (button.dataset.thumbnailRequest !== request) return;
+        releaseThumbnailCanvas(button, canvas);
+        if (!isRenderingCancelled(error) && isCurrentRenderGeneration(documentForRender, token)) {
+          showLog(String(error));
+        }
+      }
+    }
+
+    async function renderMissingThumbnails(documentForRender, token, cacheToken) {
+      if (!isCurrentThumbnailRendering(documentForRender, token, cacheToken)) return;
+      for (const button of thumbnailList.querySelectorAll("[data-page]")) {
+        if (!isCurrentThumbnailRendering(documentForRender, token, cacheToken)) return;
+        await renderThumbnail(button, documentForRender, token, cacheToken);
+      }
+    }
+
+    function requestThumbnails(documentForRender = pdfDocument, token = renderToken) {
+      const cacheToken = thumbnailCacheToken;
+      renderMissingThumbnails(documentForRender, token, cacheToken).catch((error) => {
+        if (!isRenderingCancelled(error) && isCurrentRenderGeneration(documentForRender, token)) {
+          showLog(String(error));
+        }
+      });
+    }
+
+    function getPageNumbersForRow(row) {
+      return (row.dataset.pages || "").split(",").map(Number).filter(Boolean);
+    }
+
+    function getCurrentRowFromScroll() {
+      const rows = Array.from(pdfPages.querySelectorAll(".pdf-page-row"));
+      if (!rows.length) return null;
+      const scrollRect = pdfScroll.getBoundingClientRect();
+      const threshold = scrollRect.top + 16;
+      let currentRow = rows[0];
+      for (const row of rows) {
+        if (row.getBoundingClientRect().top <= threshold) {
+          currentRow = row;
+        } else {
+          break;
+        }
+      }
+      return currentRow;
+    }
+
+    function getCurrentPageFromScroll() {
+      const row = getCurrentRowFromScroll();
+      const pages = row ? getPageNumbersForRow(row) : [];
+      return pages[0] || currentPage || 1;
+    }
+
+    function setCurrentRow(row) {
+      const pages = getPageNumbersForRow(row);
+      if (!pages.length) return;
+      currentRowPages = pages;
+      currentPage = pages[0];
+      setPageDisplay();
+      updateThumbnailSelection();
+    }
+
+    function updateCurrentPageFromScroll() {
+      if (!totalPages) return;
+      const row = getCurrentRowFromScroll();
+      if (row) setCurrentRow(row);
+    }
+
+    function scrollToPage(pageNumber) {
+      const target = pdfPages.querySelector(`[data-page="${pageNumber}"]`);
+      if (!target) return;
+      const scrollRect = pdfScroll.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      pdfScroll.scrollTop += targetRect.top - scrollRect.top - 8;
+      const row = target.closest(".pdf-page-row");
+      if (row) setCurrentRow(row);
+    }
+
+    function createPdfPageElement(pageNumber, viewport) {
+      const pageElement = document.createElement("div");
+      pageElement.className = "pdf-page";
+      pageElement.dataset.page = String(pageNumber);
+      pageElement.dataset.scale = String(viewport.scale || 1);
+      pageElement.dataset.renderState = "placeholder";
+      pageElement.style.width = `${viewport.width}px`;
+      pageElement.style.height = `${viewport.height}px`;
+      pageElement.setAttribute("aria-label", `PDF ${pageNumber}ページ`);
+      pageElement.append(createPagePlaceholder());
+      return pageElement;
+    }
+
+    async function buildPdfPageLayout(documentForRender, token) {
+      const pageFragment = document.createDocumentFragment();
+      const pageGroups = getPageGroups(documentForRender.numPages);
+      const availableWidth = Math.max(160, pdfScroll.clientWidth - 32);
+
+      for (const group of pageGroups) {
+        if (!isCurrentRenderGeneration(documentForRender, token)) return null;
+        const row = document.createElement("div");
+        row.className = "pdf-page-row";
+        row.dataset.firstPage = String(group[0]);
+        row.dataset.pages = group.join(",");
+        const maxPageWidth = group.length === 2
+          ? Math.max(80, (availableWidth - 16) / 2)
+          : availableWidth;
+
+        for (const pageNumber of group) {
+          const page = await documentForRender.getPage(pageNumber);
+          if (!isCurrentRenderGeneration(documentForRender, token)) return null;
+          row.append(createPdfPageElement(pageNumber, getViewportForWidth(page, maxPageWidth, pdfZoom)));
+        }
+        pageFragment.append(row);
+      }
+      return pageFragment;
+    }
+
+    function isRowRenderCurrent(row, documentForRender, token) {
+      return row.dataset.renderWanted === "true" &&
+        pdfPages.contains(row) &&
+        isCurrentRenderGeneration(documentForRender, token);
+    }
+
+    async function renderPageElement(pageElement, documentForRender, token) {
+      if (pageElement.dataset.renderState !== "placeholder") return;
+      const row = pageElement.closest(".pdf-page-row");
+      if (!row || !isRowRenderCurrent(row, documentForRender, token)) return;
+
+      const request = String(++pageRenderRequest);
+      pageElement.dataset.renderState = "rendering";
+      pageElement.dataset.renderRequest = request;
+      let canvas = null;
+      try {
+        const page = await documentForRender.getPage(Number(pageElement.dataset.page));
+        if (!isRowRenderCurrent(row, documentForRender, token) ||
+            pageElement.dataset.renderState !== "rendering" ||
+            pageElement.dataset.renderRequest !== request) return;
+
+        const viewport = page.getViewport({ scale: Number(pageElement.dataset.scale) || 1 });
+        canvas = document.createElement("canvas");
+        canvas.setAttribute("aria-label", pageElement.getAttribute("aria-label") || "PDF ページ");
+        ensurePagePlaceholder(pageElement).replaceWith(canvas);
+        await renderPageCanvas(page, canvas, viewport, {
+          documentForRender,
+          token,
+          pageElement,
+        });
+
+        if (!isRowRenderCurrent(row, documentForRender, token) ||
+            pageElement.dataset.renderRequest !== request) {
+          if (pageElement.dataset.renderRequest !== request) return;
+          releasePageCanvas(pageElement);
+          return;
+        }
+        pageElement.dataset.renderState = "rendered";
+      } catch (error) {
+        if (pageElement.dataset.renderRequest !== request) return;
+        if (canvas && canvas.parentElement === pageElement) {
+          releasePageCanvas(pageElement);
+        } else if (pageElement.dataset.renderState === "rendering") {
+          pageElement.dataset.renderState = "placeholder";
+          ensurePagePlaceholder(pageElement);
+        }
+        if (!isRenderingCancelled(error) && isCurrentRenderGeneration(documentForRender, token)) {
+          showLog(String(error));
+        }
+      }
+    }
+
+    function renderRowCanvases(row, documentForRender, token) {
+      if (!isRowRenderCurrent(row, documentForRender, token)) return;
+      for (const pageElement of row.querySelectorAll(".pdf-page")) {
+        void renderPageElement(pageElement, documentForRender, token);
+      }
+    }
+
+    function observePageRows(documentForRender, token) {
+      if (pageObserver) pageObserver.disconnect();
+      pageObserver = new IntersectionObserver((entries) => {
+        if (!isCurrentRenderGeneration(documentForRender, token)) return;
+        for (const entry of entries) {
+          const row = entry.target;
+          if (entry.isIntersecting) {
+            row.dataset.renderWanted = "true";
+            renderRowCanvases(row, documentForRender, token);
+          } else {
+            delete row.dataset.renderWanted;
+            releaseRowCanvases(row);
+          }
+        }
+      }, {
+        root: pdfScroll,
+        rootMargin: "100% 0px 100% 0px",
+        threshold: 0,
+      });
+      for (const row of pdfPages.querySelectorAll(".pdf-page-row")) {
+        pageObserver.observe(row);
+      }
+    }
+
+    async function renderPdfPages(restorePage, generation = null) {
+      if (!pdfDocument) return;
+      const documentForRender = pdfDocument;
+      const token = generation === null ? await beginRenderGeneration() : generation;
+      if (!isCurrentRenderGeneration(documentForRender, token)) return;
+
+      try {
+        const pageFragment = await buildPdfPageLayout(documentForRender, token);
+        if (!pageFragment || !isCurrentRenderGeneration(documentForRender, token)) return;
+        pdfPages.replaceChildren(pageFragment);
+        observePageRows(documentForRender, token);
+        scrollToPage(Math.min(Math.max(restorePage || 1, 1), documentForRender.numPages));
+        updateCurrentPageFromScroll();
+        requestThumbnails(documentForRender, token);
+      } catch (error) {
+        if (!isRenderingCancelled(error) && isCurrentRenderGeneration(documentForRender, token)) {
+          throw error;
+        }
+      }
+    }
+
+    function withCacheBuster(url) {
+      return url + (url.includes("?") ? "&" : "?") + "t=" + Date.now();
+    }
+
+    function pdfNameFor(texRel) {
+      const texName = texRel.split(/[\\/]/).pop() || "document.tex";
+      return texName.replace(/\.tex$/i, ".pdf");
+    }
+
+    async function destroyPdfDocument(documentForDestroy) {
+      try {
+        await documentForDestroy.destroy();
+      } catch (_) {
+        // 破棄済みドキュメントの競合は表示上の失敗にしない。
+      }
+    }
+
+    async function loadPdf(url, texRel, preservePosition = true) {
+      if (!window.pdfjsLib) throw new Error("PDF.js の読み込みに失敗しました。");
+      const restorePage = preservePosition && totalPages ? getCurrentPageFromScroll() : 1;
+      const loadToken = ++pdfLoadToken;
+      const nextDocument = await window.pdfjsLib.getDocument(withCacheBuster(url)).promise;
+      if (loadToken !== pdfLoadToken) {
+        await destroyPdfDocument(nextDocument);
+        return;
+      }
+
+      const previousDocument = pdfDocument;
+      pdfDocument = nextDocument;
+      totalPages = nextDocument.numPages;
+      currentPage = Math.min(Math.max(restorePage, 1), totalPages);
+      currentRowPages = [currentPage];
+      resetThumbnailCache(totalPages);
+      pdfUrl = url;
+      try {
+        pdfBuildPath = new URL(url, window.location.origin).searchParams.get("path");
+      } catch (_) {
+        pdfBuildPath = null;
+      }
+      pdfFilename = pdfNameFor(texRel);
+      updateDownloadAvailability();
+      const token = await beginRenderGeneration();
+      if (previousDocument && previousDocument !== nextDocument) {
+        await destroyPdfDocument(previousDocument);
+      }
+      if (loadToken !== pdfLoadToken || pdfDocument !== nextDocument || token !== renderToken) return;
+
+      await renderPdfPages(currentPage, token);
+    }
+
+    function refreshPdfLayout() {
+      if (!pdfDocument || pdfZoom !== 100) return;
+      renderPdfPages(getCurrentPageFromScroll()).catch((error) => {
+        if (!isRenderingCancelled(error)) showLog(String(error));
+      });
+    }
+
+    function setPdfZoom(nextZoom) {
+      const clampedZoom = Math.min(MAX_PDF_ZOOM, Math.max(MIN_PDF_ZOOM, nextZoom));
+      if (clampedZoom === pdfZoom) return;
+      const restorePage = getCurrentPageFromScroll();
+      pdfZoom = clampedZoom;
+      updatePdfZoomControls();
+      if (pdfDocument) renderPdfPages(restorePage).catch((error) => {
+        if (!isRenderingCancelled(error)) showLog(String(error));
+      });
+    }
+
+    function downloadCurrentPdf() {
+      if (!pdfUrl || !pdfFilename) return;
+      const link = document.createElement("a");
+      link.href = pdfUrl;
+      link.download = pdfFilename;
+      document.body.append(link);
+      link.click();
+      link.remove();
+    }
+
+    function rememberPdfMouseDown(event) {
+      const pageElement = event.target instanceof Element ? event.target.closest(".pdf-page") : null;
+      if (!pageElement || !pdfPages.contains(pageElement) || event.button !== 0) {
+        pdfPointerDown = null;
+        return;
+      }
+      pdfPointerDown = { x: event.clientX, y: event.clientY };
+    }
+
+    async function handlePdfInverseSearch(event) {
+      const pageElement = event.target instanceof Element ? event.target.closest(".pdf-page") : null;
+      const mouseDown = pdfPointerDown;
+      pdfPointerDown = null;
+      if (!pageElement || !pdfPages.contains(pageElement) || event.button !== 0 || !mouseDown) return;
+      if (Math.hypot(event.clientX - mouseDown.x, event.clientY - mouseDown.y) > 4) return;
+
+      const page = Number(pageElement.dataset.page);
+      const scale = Number(pageElement.dataset.scale);
+      if (!Number.isInteger(page) || page < 1 || !Number.isFinite(scale) || scale <= 0 || !pdfBuildPath) return;
+      const rect = pageElement.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / scale;
+      const y = (event.clientY - rect.top) / scale;
+
+      try {
+        const response = await fetch("/api/synctex-edit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pdf: pdfBuildPath, page, x, y }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          showSynctexToast(data.reason || "SyncTeX 逆引きに失敗しました");
+          return;
+        }
+        if (!current || !sameRel(current.rel, data.rel)) await openFile(data.rel);
+        if (!current || !sameRel(current.rel, data.rel)) return;
+        jumpToSynctexLine(data.line);
+      } catch (_) {
+        showSynctexToast("SyncTeX 逆引きに失敗しました");
+      }
+    }
+
+    function clearSynctexMarker() {
+      if (synctexMarkerTimer) {
+        window.clearTimeout(synctexMarkerTimer);
+        synctexMarkerTimer = null;
+      }
+      if (synctexMarker) {
+        synctexMarker.remove();
+        synctexMarker = null;
+      }
+    }
+
+    function showSynctexMarker(pageElement, target, scale) {
+      clearSynctexMarker();
+      const marker = document.createElement("div");
+      marker.className = "synctex-forward-marker";
+      marker.setAttribute("aria-hidden", "true");
+      const left = target.x * scale;
+      marker.style.left = `${left}px`;
+      marker.style.top = `${target.y * scale}px`;
+      marker.style.width = `${target.width > 0 ? target.width * scale : Math.max(0, pageElement.clientWidth - left)}px`;
+      marker.style.height = `${(target.height > 0 ? target.height : 12) * scale}px`;
+      pageElement.append(marker);
+      synctexMarker = marker;
+      synctexMarkerTimer = window.setTimeout(clearSynctexMarker, 1500);
+    }
+
+    // scrollToPage と同じ流儀（getBoundingClientRect の差分を scrollTop に足す）。該当箇所を縦中央付近に置く。
+    function scrollToSynctexTarget(pageElement, target, scale) {
+      const scrollRect = pdfScroll.getBoundingClientRect();
+      const pageRect = pageElement.getBoundingClientRect();
+      pdfScroll.scrollTop +=
+        pageRect.top - scrollRect.top + target.y * scale - pdfScroll.clientHeight / 2;
+      const row = pageElement.closest(".pdf-page-row");
+      if (row) setCurrentRow(row);
+    }
+
+    async function runSynctexForwardSearch() {
+      if (!current || !current.rel || !pdfBuildPath) {
+        showSynctexToast("PDF が表示されていません");
+        return;
+      }
+      const line = cm.getCursor().line + 1;
+      try {
+        const response = await fetch("/api/synctex-forward", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pdf: pdfBuildPath, rel: current.rel, line }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          showSynctexToast(data.reason || "SyncTeX 前方検索に失敗しました");
+          return;
+        }
+        const pageElement = pdfPages.querySelector(`[data-page="${data.page}"]`);
+        if (!pageElement) {
+          showSynctexToast("該当ページが表示されていません");
+          return;
+        }
+        const scale = Number(pageElement.dataset.scale);
+        if (!Number.isFinite(scale) || scale <= 0) {
+          showSynctexToast("該当ページが表示されていません");
+          return;
+        }
+        scrollToSynctexTarget(pageElement, data, scale);
+        showSynctexMarker(pageElement, data, scale);
+      } catch (_) {
+        showSynctexToast("SyncTeX 前方検索に失敗しました");
+      }
+    }
+
+    async function openFile(rel) {
+      if (current && dirty && !window.confirm("未保存の変更があります。破棄してファイルを開きますか？")) {
+        return;
+      }
+      setStatus("loading");
+      try {
+        const response = await fetch("/api/file?path=" + encodeURIComponent(rel));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.reason || "ファイルを開けませんでした。");
+        const lineSeparator = detectLineSeparator(data.content);
+        settingValue = true;
+        try {
+          cm.setOption("lineSeparator", lineSeparator);
+          cm.setValue(data.content);
+        } finally {
+          settingValue = false;
+        }
+        current = { rel, mtimeMs: data.mtimeMs, lineSeparator };
+        updateOpenTreeFile();
+        dirty = false;
+        fileName.textContent = rel;
+        copyPathButton.disabled = false;
+        reloadFileButton.disabled = false;
+        extUpdateBanner.hidden = true;
+        cm.clearHistory();
+        clearLog();
+        setStatus("saved");
+      } catch (error) {
+        showLog(String(error));
+        setStatus("error");
+      }
+    }
+
+    async function save() {
+      if (!current) return;
+      if (saving) {
+        savePending = true;
+        return;
+      }
+      saving = true;
+      const savedFile = current;
+      const content = cm.getValue(savedFile.lineSeparator);
+      setStatus("compiling");
+      try {
+        const response = await fetch("/api/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            path: savedFile.rel,
+            content,
+            baseMtimeMs: savedFile.mtimeMs,
+          }),
+        });
+        if (response.status === 409) {
+          setStatus("conflict");
+          window.alert("このファイルは他の場所（別の PC・エディタ等）で更新されています。\n再読込してから編集し直してください。");
+          return;
+        }
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.reason || "保存に失敗しました。");
+        savedFile.mtimeMs = data.mtimeMs;
+        dirty = cm.getValue() !== content;
+        if (data.compile && data.compile.ok) {
+          await loadPdf(data.compile.pdf, savedFile.rel, true);
+          clearLog();
+          setStatus(dirty ? "dirty" : "saved");
+        } else if (data.compile) {
+          showLog(data.compile.log);
+          setStatus("error");
+        } else {
+          clearLog();
+          setStatus(dirty ? "dirty" : "saved");
+        }
+      } catch (error) {
+        showLog(String(error));
+        setStatus("error");
+      } finally {
+        saving = false;
+        if (savePending) {
+          savePending = false;
+          void save();
+        }
+      }
+    }
+
+    // ツリーのホバーでカーソル右横にフルネームを表示（title のネイティブ表示は環境によって出ないため自前で描く）
+    let hoverTip = null;
+    function ensureHoverTip() {
+      if (hoverTip) return hoverTip;
+      hoverTip = document.createElement("div");
+      hoverTip.id = "hover-tip";
+      hoverTip.hidden = true;
+      document.body.append(hoverTip);
+      return hoverTip;
+    }
+    function moveHoverTip(event) {
+      const tip = ensureHoverTip();
+      const margin = 8;
+      let left = event.clientX + 14;
+      const width = tip.offsetWidth;
+      if (left + width + margin > window.innerWidth) left = window.innerWidth - width - margin;
+      tip.style.left = `${left}px`;
+      tip.style.top = `${Math.min(event.clientY + 6, window.innerHeight - tip.offsetHeight - margin)}px`;
+    }
+    function bindHoverTip(container) {
+      container.addEventListener("mouseover", (event) => {
+        const item = event.target.closest("button.tree-file, summary");
+        if (!item || !container.contains(item)) return;
+        const tip = ensureHoverTip();
+        tip.textContent = item.textContent;
+        tip.hidden = false;
+        moveHoverTip(event);
+      });
+      container.addEventListener("mousemove", (event) => {
+        if (hoverTip && !hoverTip.hidden) moveHoverTip(event);
+      });
+      container.addEventListener("mouseout", (event) => {
+        if (!hoverTip) return;
+        const item = event.target.closest("button.tree-file, summary");
+        if (item) hoverTip.hidden = true;
+      });
+      container.addEventListener("mouseleave", () => {
+        if (hoverTip) hoverTip.hidden = true;
+      });
+    }
+
+    function initialize() {
+      tree = document.getElementById("tree");
+      bindHoverTip(tree);
+      rootSelect = document.getElementById("root-select");
+      fileName = document.getElementById("file-name");
+      copyPathButton = document.getElementById("copy-path");
+      reloadFileButton = document.getElementById("reload-file");
+      extUpdateBanner = document.getElementById("ext-update-banner");
+
+      async function reloadAndCompile() {
+        if (!current) return;
+        if (dirty && !window.confirm("未保存の変更を破棄して、ディスクの内容を読み込み直しますか？")) return;
+        await openFile(current.rel);
+        extUpdateBanner.hidden = true;
+        if (!current || !/\.tex$/i.test(current.rel)) return;
+        // 読み直したファイルを保存なしでコンパイルして PDF も最新化する
+        setStatus("compiling");
+        try {
+          const response = await fetch("/api/compile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: current.rel }),
+          });
+          const data = await response.json();
+          if (!response.ok || !data.ok) throw new Error(data.reason || "コンパイルに失敗しました。");
+          if (data.compile && data.compile.ok) {
+            await loadPdf(data.compile.pdf, current.rel, true);
+            clearLog();
+            setStatus("saved");
+          } else if (data.compile) {
+            showLog(data.compile.log);
+            setStatus("error");
+          }
+        } catch (error) {
+          showLog(String(error));
+          setStatus("error");
+        }
+      }
+      reloadFileButton.addEventListener("click", reloadAndCompile);
+      document.getElementById("ext-update-reload").addEventListener("click", reloadAndCompile);
+      document.getElementById("tree-reload").addEventListener("click", () => loadTree());
+
+      // 外部更新の検知: 開いているファイルの mtime を軽くポーリングして、ずれたらバナーを出す
+      window.setInterval(async () => {
+        if (!current || saving || document.hidden) return;
+        try {
+          const response = await fetch("/api/stat?path=" + encodeURIComponent(current.rel));
+          if (!response.ok) return;
+          const data = await response.json();
+          if (!current || !data.ok) return;
+          extUpdateBanner.hidden = Math.abs(data.mtimeMs - current.mtimeMs) <= 1;
+        } catch (_) {
+          /* オフライン・一時エラーは無視（次の周期で再判定） */
+        }
+      }, 3000);
+      copyPathButton.addEventListener("click", async () => {
+        if (!current) return;
+        // 表示名（編集フォルダ起点の相対パス）をそのままコピーする。
+        const relPath = current.rel;
+        const copyIcon = document.getElementById("copy-path-icon");
+        const doneIcon = document.getElementById("copy-done-icon");
+        try {
+          await navigator.clipboard.writeText(relPath);
+          copyIcon.hidden = true;
+          doneIcon.hidden = false;
+          window.setTimeout(() => {
+            copyIcon.hidden = false;
+            doneIcon.hidden = true;
+          }, 1500);
+        } catch (_) {
+          window.prompt("コピーできませんでした。手動でコピーしてください:", relPath);
+        }
+      });
+      status = document.getElementById("status");
+      synctexToast = document.getElementById("synctex-toast");
+      thumbnailToggle = document.getElementById("thumbnail-toggle");
+      thumbnailSidebar = document.getElementById("thumbnail-sidebar");
+      thumbnailList = document.getElementById("thumbnail-list");
+      pdfScroll = document.getElementById("pdf-scroll");
+      pdfPages = document.getElementById("pdf-pages");
+      pageIndicator = document.getElementById("page-indicator");
+      pageCount = document.getElementById("page-count");
+      spreadToggle = document.getElementById("spread-toggle");
+      zoomOutButton = document.getElementById("zoom-out");
+      zoomInButton = document.getElementById("zoom-in");
+      zoomResetButton = document.getElementById("zoom-reset");
+      downloadButton = document.getElementById("download-pdf");
+      workspace = document.getElementById("workspace");
+      treePane = document.getElementById("tree-pane");
+      treeDivider = document.getElementById("tree-divider");
+      cm = CodeMirror.fromTextArea(document.getElementById("source"), {
+        mode: "stex",
+        lineNumbers: true,
+        lineWrapping: true,
+        extraKeys: {
+          "Ctrl-Space": showTexHint,
+          // 選択範囲（複数行可）の % コメントアウト切り替え。stex の lineComment が "%"
+          "Ctrl-/": "toggleComment",
+          "Cmd-/": "toggleComment",
+          // SyncTeX 前方検索（カーソル行 → PDF の該当位置）。LaTeX Workshop と同じ割り当て
+          "Ctrl-Alt-J": () => { void runSynctexForwardSearch(); },
+          "Cmd-Alt-J": () => { void runSynctexForwardSearch(); },
+        },
+      });
+
+      cm.on("inputRead", (editor) => {
+        const context = getTexHintContext(editor);
+        if (!context || (context.kind === "command" && context.prefix.length === 0)) return;
+        showTexHint(editor);
+      });
+
+      cm.on("change", () => {
+        if (!settingValue && current) {
+          dirty = true;
+          setStatus("dirty");
+        }
+      });
+
+      pdfPages.addEventListener("mousedown", rememberPdfMouseDown);
+      pdfPages.addEventListener("click", (event) => {
+        void handlePdfInverseSearch(event);
+      });
+
+      tree.addEventListener("click", (event) => {
+        const target = event.target instanceof Element ? event.target.closest("[data-rel]") : null;
+        if (!target || !tree.contains(target)) return;
+        openFile(target.dataset.rel);
+      });
+
+      rootSelect.addEventListener("change", renderSelectedTree);
+
+      treeDivider.addEventListener("mousedown", resizeTreePane);
+      restoreTreeWidth();
+
+      thumbnailToggle.addEventListener("click", () => {
+        const restorePage = getCurrentPageFromScroll();
+        sidebarOpen = !sidebarOpen;
+        updateSidebarToggle();
+        if (pdfDocument) renderPdfPages(restorePage).catch((error) => {
+          if (!isRenderingCancelled(error)) showLog(String(error));
+        });
+      });
+
+      spreadToggle.addEventListener("click", () => {
+        const restorePage = getCurrentPageFromScroll();
+        spreadMode = !spreadMode;
+        updateSpreadToggle();
+        if (pdfDocument) renderPdfPages(restorePage).catch((error) => {
+          if (!isRenderingCancelled(error)) showLog(String(error));
+        });
+      });
+
+      zoomOutButton.addEventListener("click", () => {
+        setPdfZoom(pdfZoom - PDF_ZOOM_STEP);
+      });
+
+      zoomInButton.addEventListener("click", () => {
+        setPdfZoom(pdfZoom + PDF_ZOOM_STEP);
+      });
+
+      zoomResetButton.addEventListener("click", () => {
+        setPdfZoom(100);
+      });
+
+      downloadButton.addEventListener("click", downloadCurrentPdf);
+
+      thumbnailList.addEventListener("click", (event) => {
+        const target = event.target instanceof Element ? event.target.closest("[data-page]") : null;
+        if (!target || !thumbnailList.contains(target)) return;
+        scrollToPage(Number(target.dataset.page));
+      });
+
+      pdfScroll.addEventListener("scroll", () => {
+        if (scrollFrame) return;
+        scrollFrame = window.requestAnimationFrame(() => {
+          scrollFrame = null;
+          updateCurrentPageFromScroll();
+        });
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+          event.preventDefault();
+          save();
+        }
+      });
+
+      window.addEventListener("beforeunload", (event) => {
+        if (!dirty) return;
+        event.preventDefault();
+        event.returnValue = "";
+      });
+
+      window.addEventListener("resize", () => {
+        window.clearTimeout(resizeTimer);
+        resizeTimer = window.setTimeout(() => {
+          refreshPdfLayout();
+        }, 200);
+      });
+
+      updateSidebarToggle();
+      updateSpreadToggle();
+      updatePdfZoomControls();
+      updateDownloadAvailability();
+      setPageDisplay();
+      loadTree();
+    }
+
+    window.addEventListener("DOMContentLoaded", initialize);
+  </script>
+</body>
+</html>
