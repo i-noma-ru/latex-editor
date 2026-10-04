@@ -55,7 +55,7 @@ function readSynctexRecords(gzPath, onlyPage) {
     if (!inContent) {
       const input = /^Input:(\d+):(.*)$/.exec(text);
       if (input) {
-        // macOS の lualatex は Input: を NFD（濁点分離）で書く。Dropbox の File Provider 領域は
+        // macOS の lualatex は Input: を NFD（濁点分離）で書く。クラウド同期のフォルダ（File Provider）は
         // NFD のパスで realpath が ENOENT になるため、読み取った時点で NFC に揃える。
         inputs.set(Number(input[1]), input[2].normalize("NFC"));
         continue;
