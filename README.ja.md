@@ -107,8 +107,8 @@ node --test test/synctex.test.js test/start_stop.test.js
 
 ## 同梱ライブラリ
 
-- エディタ: CodeMirror 5（MIT License・© Marijn Haverbeke and others）。ライセンス本文は `vendor/LICENSE`。
-- PDF プレビュー: PDF.js 4.10.38（Apache License 2.0・Mozilla Foundation）。ライセンス本文は `vendor/LICENSE_pdfjs`。
+- エディタ: [CodeMirror 5](https://codemirror.net/5/) 5.65.16（[ソース](https://github.com/codemirror/codemirror5)・MIT License・© Marijn Haverbeke and others）。ライセンス本文は [`vendor/LICENSE`](vendor/LICENSE)。
+- PDF プレビュー: [PDF.js](https://mozilla.github.io/pdf.js/) 4.10.38（[ソース](https://github.com/mozilla/pdf.js)・Apache License 2.0・Mozilla Foundation）。ライセンス本文は [`vendor/LICENSE_pdfjs`](vendor/LICENSE_pdfjs)。
 
 ## 補足
 

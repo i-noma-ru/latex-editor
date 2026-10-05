@@ -107,8 +107,8 @@ node --test test/synctex.test.js test/start_stop.test.js
 
 ## Bundled libraries
 
-- Editor: CodeMirror 5 (MIT License, © Marijn Haverbeke and others). License text: `vendor/LICENSE`.
-- PDF preview: PDF.js 4.10.38 (Apache License 2.0, Mozilla Foundation). License text: `vendor/LICENSE_pdfjs`.
+- Editor: [CodeMirror 5](https://codemirror.net/5/) 5.65.16 ([source](https://github.com/codemirror/codemirror5); MIT License, © Marijn Haverbeke and others). License text: [`vendor/LICENSE`](vendor/LICENSE).
+- PDF preview: [PDF.js](https://mozilla.github.io/pdf.js/) 4.10.38 ([source](https://github.com/mozilla/pdf.js); Apache License 2.0, Mozilla Foundation). License text: [`vendor/LICENSE_pdfjs`](vendor/LICENSE_pdfjs).
 
 ## Notes
 
