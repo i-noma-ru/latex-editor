@@ -12,7 +12,8 @@ English: [README.md](README.md)
 ## 必要なもの
 
 - Node.js 18 以降
-- `lualatex` に PATH が通った TeX 環境（TeX Live など）。別のエンジンは `--engine` で指定できます。
+- `lualatex` に PATH が通った TeX 環境（TeX Live など）。PDF を直接出す別のエンジン（`pdflatex`・`xelatex` など）は `--engine` で指定できます。
+- **`uplatex` と `platex` には対応していません。** PDF ではなく DVI を出すので、毎回コンパイル失敗の扱いになります。
 
 エディタ自体は、作者の環境の一部として macOS と Windows で使ってきました。単体で動くこの版（コンパイル処理 `compile.js` を新しく書いたもの）は、macOS でだけ確認しています。
 
@@ -46,7 +47,18 @@ node /path/to/latex-editor/stop.js
 
 - 一覧に出るのは、編集フォルダ以下の `.tex`・`.sty`・`.cls`・`.md`・`.txt` です。隠しフォルダと `node_modules` は出しません。
 - `.tex` を保存するとコンパイルします。ログが再実行を求めたときは、最大 3 回まで実行します。
-- 出力先フォルダは、編集フォルダと同じフォルダ構成になります。
+- 出力先フォルダは、編集フォルダと同じフォルダ構成になります。コンパイルの前に、`.tex` のあるフォルダの下位フォルダを出力先にも作るので、`\include{chapters/ch1}` の `.aux` をそこへ書けます。
+- BibTeX・biber・makeindex は実行しません。
+- 補完候補の一部（`\dfrac`・`\text`・`\therefore`・`\mathbb` など）は、`amsmath` か `amssymb` が必要です。
+
+### 別のフォルダにあるスタイルファイル
+
+エンジンは `.tex` のあるフォルダで実行するので、同じフォルダの `.sty`・`.cls` は読み込まれます。別のフォルダに置いたものは見つかりません（エディタは検索パスを足しません）。読み込ませる方法は 2 つあります。
+
+- 個人用の TeX ツリーに置く（場所は `kpsewhich -var-value TEXMFHOME` で分かります。MacTeX では `~/Library/texmf`、ほかではふつう `~/texmf` で、LaTeX のファイルはその下の `tex/latex/` に置きます）。
+- 環境変数 `TEXINPUTS` を設定してからエディタを起動する（エンジンに引き継がれます）。末尾の区切り文字は、標準の検索先を残すためのものです: `TEXINPUTS=/path/to/styles//: node start.js`（Windows の区切り文字は `;`）。
+
+`.sty`・`.cls` を保存してもコンパイルは走りません。それを使う `.tex` を保存してください。
 
 | キー（Mac / Windows） | 動作 |
 |---|---|
@@ -73,7 +85,7 @@ SyncTeX は、ファイルを移したあとや初めて開いたあとに 1 回
 node --test test/synctex.test.js test/start_stop.test.js
 ```
 
-`start_stop.test.js` は、一時フォルダを編集フォルダにして、空いているローカルのポートで実際にサーバーを起動し、小さな文書をコンパイルします。`lualatex` が無いときは、コンパイルのテストを飛ばします。
+`start_stop.test.js` は、一時フォルダを編集フォルダにして、空いているローカルのポートで実際にサーバーを起動し、小さな文書をコンパイルします。PATH に `lualatex` が無いときは、コンパイルのテストを飛ばします。`synctex.test.js` は見本を `lualatex` で作るので、そのときは全部のテストを飛ばします。
 
 ## 制約
 

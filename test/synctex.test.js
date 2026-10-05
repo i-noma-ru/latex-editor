@@ -1,18 +1,17 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { after, before, test } = require("node:test");
+const { after, before, test: nodeTest } = require("node:test");
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { synctexEdit, synctexForward } = require("../synctex");
 
-// Win は固定パス・Mac は TeX Live の標準リンク（どちらも無ければ PATH の lualatex）
-const LUALATEX = [
-  "C:\\texlive\\2025\\bin\\windows\\lualatex.exe",
-  "/Library/TeX/texbin/lualatex",
-].find((p) => fs.existsSync(p)) || "lualatex";
+// PATH の lualatex を使う。無ければ、このファイルのテストはすべて飛ばす（フィクスチャを作れないため）
+const LUALATEX = "lualatex";
+const HAS_LUALATEX = spawnSync(LUALATEX, ["--version"], { stdio: "ignore" }).status === 0;
+const test = (name, fn) => nodeTest(name, { skip: HAS_LUALATEX ? false : "lualatex が無い" }, fn);
 const SOURCE = String.raw`\documentclass{article}
 \begin{document}
 Hello world one
@@ -39,7 +38,7 @@ let gzPath;
 let texPath;
 
 before(() => {
-  assert.ok(fs.existsSync(LUALATEX), `${LUALATEX} が見つかりません`);
+  if (!HAS_LUALATEX) return;
   const tempRoot = process.platform === "win32" ? "C:\\texlive\\tmp" : os.tmpdir();
   fs.mkdirSync(tempRoot, { recursive: true });
   // フォルダ名に日本語を入れる: macOS の lualatex は Input: を NFD で書くので、

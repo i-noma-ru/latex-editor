@@ -14,11 +14,8 @@ const path = require("node:path");
 const HERE = path.resolve(__dirname, "..");
 const START = path.join(HERE, "start.js");
 const STOP = path.join(HERE, "stop.js");
-// Win は固定パス・Mac は TeX Live の標準リンク（どちらも無ければ PATH の lualatex）
-const LUALATEX = [
-  "C:\\texlive\\2025\\bin\\windows\\lualatex.exe",
-  "/Library/TeX/texbin/lualatex",
-].find((p) => fs.existsSync(p)) || "lualatex";
+// PATH の lualatex を使う。無ければ、コンパイルのテストを飛ばす
+const LUALATEX = "lualatex";
 const HAS_LUALATEX = spawnSync(LUALATEX, ["--version"], { stdio: "ignore" }).status === 0;
 
 let port;
@@ -88,6 +85,9 @@ before(async () => {
   fs.writeFileSync(path.join(texRoot, "sub", "sample.tex"), "\\documentclass{article}\n\\begin{document}\nHello\n\\end{document}\n");
   fs.writeFileSync(path.join(texRoot, "sub", "broken.tex"), "\\documentclass{article}\n\\begin{document}\n\\undefinedcommand\n\\end{document}\n");
   fs.writeFileSync(path.join(texRoot, "sub", "ignored.png"), "x");
+  fs.mkdirSync(path.join(texRoot, "chapters"));
+  fs.writeFileSync(path.join(texRoot, "book.tex"), "\\documentclass{article}\n\\begin{document}\nbook\n\\include{chapters/ch1}\n\\end{document}\n");
+  fs.writeFileSync(path.join(texRoot, "chapters", "ch1.tex"), "chapter one\n");
 
   port = await freePort();
   occupiedPort = await freePort();
@@ -133,7 +133,7 @@ test("tree は .tex 類だけを返し、rel は OS を問わず / 区切り", a
     }
   };
   walk(body.tree);
-  assert.deepEqual(rels.sort(), ["sub/broken.tex", "sub/sample.tex", "top.tex"]);
+  assert.deepEqual(rels.sort(), ["book.tex", "chapters/ch1.tex", "sub/broken.tex", "sub/sample.tex", "top.tex"]);
 });
 
 test("編集フォルダの外は読めない・書けない", async () => {
@@ -172,7 +172,16 @@ test("コンパイルに失敗したら、失敗として返す（前回の PDF 
   assert.equal(result.status, 200);
   assert.equal(result.body.compile.ok, false);
   assert.equal(result.body.compile.pdf, null);
-  assert.match(result.body.compile.log, /Undefined control sequence/);
+  // TeX は端末への出力を 79 桁で折り返すことがある（パスが長いと語の途中で切れる）ので、改行を除いて調べる
+  assert.match(result.body.compile.log.replace(/\r?\n/g, ""), /Undefined control sequence/);
+});
+
+test("サブフォルダの \\include があっても、出力先に同じフォルダを作ってコンパイルできる", { timeout: 120000 }, async (t) => {
+  if (!HAS_LUALATEX) return t.skip("lualatex が無い");
+  const result = await post("/api/compile", { path: "book.tex" });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.compile.ok, true, result.body.compile.log);
+  assert.equal(fs.existsSync(path.join(buildDir, "chapters", "ch1.aux")), true);
 });
 
 test("再実行は冪等", { timeout: 30000 }, async (t) => {

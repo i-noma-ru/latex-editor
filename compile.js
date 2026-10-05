@@ -11,6 +11,26 @@ const { spawnSync } = require("child_process");
 const MAX_RUNS = 3;
 const RERUN = /Rerun to get|Label\(s\) may have changed|Rerun LaTeX/;
 
+// \include{sub/ch1} は出力先の sub/ に .aux を書く。フォルダが無いと TeX が止まるので、
+// .tex のあるフォルダと同じ構成を出力先に作っておく（隠しフォルダと node_modules は除く）
+function mirrorFolders(from, to, skip) {
+  let entries;
+  try {
+    entries = fs.readdirSync(from, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === "node_modules") continue;
+    const source = path.join(from, entry.name);
+    const target = path.join(to, entry.name);
+    // 出力先が .tex のフォルダの中にあるとき、出力先の中へ降りていかない（作ったフォルダをまた写して終わらなくなる）
+    if (source === skip) continue;
+    fs.mkdirSync(target, { recursive: true });
+    mirrorFolders(source, target, skip);
+  }
+}
+
 function main(args) {
   const tex = args[0];
   const options = { dest: null, engine: "lualatex" };
@@ -32,6 +52,7 @@ function main(args) {
   const log = path.join(dest, name + ".log");
   // 前回の PDF が残っていると、失敗しても成功に見える。先に消す
   fs.rmSync(pdf, { force: true });
+  mirrorFolders(path.resolve(path.dirname(tex)), dest, dest);
 
   for (let run = 1; run <= MAX_RUNS; run += 1) {
     console.log(`[${run}] ${options.engine} ${path.basename(tex)}`);
@@ -39,7 +60,8 @@ function main(args) {
       options.engine,
       ["-interaction=nonstopmode", "-halt-on-error", "-file-line-error", "--synctex=1", `-output-directory=${dest}`, tex],
       // 相対パスの \input や画像を解決できるよう、.tex のあるフォルダで実行する
-      { cwd: path.dirname(tex), encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }
+      // max_print_line: TeX Live は端末への出力を 79 桁で折り返す。エラー行を 1 行で読めるように広げる
+      { cwd: path.dirname(tex), encoding: "utf8", maxBuffer: 64 * 1024 * 1024, env: { ...process.env, max_print_line: "2000" } }
     );
     if (result.error) {
       console.error(result.error.code === "ENOENT"

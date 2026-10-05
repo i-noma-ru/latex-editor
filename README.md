@@ -12,7 +12,8 @@ A local web editor for LaTeX: file tree, editor, and PDF preview in one browser 
 ## Requirements
 
 - Node.js 18 or later.
-- A TeX distribution with `lualatex` on `PATH` (for example TeX Live). Another engine can be chosen with `--engine`.
+- A TeX distribution with `lualatex` on `PATH` (for example TeX Live). Another engine that writes a PDF directly (such as `pdflatex` or `xelatex`) can be chosen with `--engine`.
+- **`uplatex` and `platex` are not supported.** They write a DVI file, not a PDF, so every compile is reported as failed.
 
 The editor has been used on macOS and Windows as part of the author's own setup. This standalone version, with its own compile step (`compile.js`), was tested on macOS only.
 
@@ -46,7 +47,18 @@ To run the server in the foreground and see its log: `node server.js` with the s
 
 - The tree shows `.tex`, `.sty`, `.cls`, `.md`, and `.txt` files under the root. Hidden folders and `node_modules` are skipped.
 - Saving a `.tex` file compiles it. The engine runs up to three times when the log asks for a rerun.
-- The build folder mirrors the folder layout of the root.
+- The build folder mirrors the folder layout of the root. Before each compile, the subfolders of the `.tex` file's folder are created in the build folder too, so that `\include{chapters/ch1}` can write its `.aux` file there.
+- BibTeX, biber, and makeindex are not run.
+- Some completion candidates (`\dfrac`, `\text`, `\therefore`, `\mathbb`, and others) need `amsmath` or `amssymb`.
+
+### Style files in another folder
+
+The engine runs in the folder of the `.tex` file, so a `.sty` or `.cls` next to it is found. One kept in a different folder is not; the editor adds no search path. Two ways to make it visible:
+
+- Put it under your personal TeX tree (`kpsewhich -var-value TEXMFHOME` prints the location: `~/Library/texmf` on MacTeX, usually `~/texmf` elsewhere; LaTeX files go in `tex/latex/` below it).
+- Set `TEXINPUTS` before starting the editor; the engine inherits it. The trailing separator keeps the standard paths: `TEXINPUTS=/path/to/styles//: node start.js` (on Windows the separator is `;`).
+
+Saving a `.sty` or `.cls` file does not compile anything; save the `.tex` file that uses it.
 
 | Keys (Mac / Windows) | Action |
 |---|---|
@@ -73,7 +85,7 @@ SyncTeX needs a compile after the file was last moved or opened for the first ti
 node --test test/synctex.test.js test/start_stop.test.js
 ```
 
-`start_stop.test.js` starts a real server on a free local port in a temporary folder and compiles small documents; the compile tests are skipped when `lualatex` is not found.
+`start_stop.test.js` starts a real server on a free local port in a temporary folder and compiles small documents; the compile tests are skipped when `lualatex` is not found on `PATH`. `synctex.test.js` builds its fixture with `lualatex`, so all of its tests are skipped in that case.
 
 ## Limits
 
