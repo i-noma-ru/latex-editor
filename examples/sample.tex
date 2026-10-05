@@ -1,0 +1,37 @@
+% latex-editor の見本。保存（Cmd+S / Ctrl+S）するとコンパイルされ、右に PDF が出ます。
+% 同じフォルダの sample-style.sty を読み込みます。
+\documentclass[a4paper]{ltjsarticle}
+\usepackage{sample-style}
+
+\begin{document}
+
+\section*{latex-editor の見本}
+
+この文書は、同じフォルダにあるスタイルファイル \texttt{sample-style.sty} を読み込んでいます。
+\verb|\combi|・\verb|\degree|・\verb|reidai| 環境・\verb|\kotae| は、そのスタイルファイルで定義したものです。
+
+\begin{reidai}
+5 人から 2 人を選ぶ選び方は何通りあるか。
+\[
+  \combi{5}{2} = \frac{5 \cdot 4}{2 \cdot 1} = \kotae{10}
+\]
+\end{reidai}
+
+\begin{reidai}
+$\sin 30\degree$ と $\cos 60\degree$ の値を求めよ。
+\[
+  \sin 30\degree = \cos 60\degree = \kotae{$\dfrac{1}{2}$}
+\]
+\end{reidai}
+
+\begin{reidai}
+2 次方程式 $ax^2 + bx + c = 0$ $(a \neq 0)$ の解は
+\[
+  x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
+\]
+である。
+\end{reidai}
+
+PDF の文字をクリックすると、この .tex の対応する行へ移動します。
+
+\end{document}

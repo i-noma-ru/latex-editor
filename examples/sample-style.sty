@@ -1,0 +1,21 @@
+% sample-style.sty — a small style file for examples/sample.tex.
+% It sits next to sample.tex, so the engine finds it without any search path setting.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{sample-style}[2026/10/06 Sample style for latex-editor]
+
+\RequirePackage{amsmath}
+\RequirePackage{amssymb}
+
+% 組合せ nCr と度（°）
+\newcommand{\combi}[2]{{}_{#1}\mathrm{C}_{#2}}
+\newcommand{\degree}{^{\circ}}
+
+% 例題の見出しつき段落
+\newcounter{reidai}
+\newenvironment{reidai}{%
+  \refstepcounter{reidai}\par\medskip\noindent
+  \textbf{例題 \thereidai}\quad\ignorespaces
+}{\par\medskip}
+
+% 枠つきの答え
+\newcommand{\kotae}[1]{\fbox{\,#1\,}}

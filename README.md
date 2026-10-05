@@ -33,6 +33,18 @@ node /path/to/latex-editor/stop.js
 
 `stop.js` stops only this editor's server. If another process holds the port, it leaves it alone and exits with 1.
 
+### Try the sample
+
+`examples/` holds a small Japanese document (`sample.tex`, class `ltjsarticle`) and a style file next to it (`sample-style.sty`) that defines the commands the document uses. It needs `luatexja`, which a full TeX Live install includes.
+
+```sh
+node start.js --root examples
+```
+
+Click `sample.tex` in the tree and save it (`Cmd+S` / `Ctrl+S`); the PDF appears on the right.
+
+### Options
+
 | Option | Meaning |
 |---|---|
 | `--port 8950` | Port (default 8940). Pass the same value to `stop.js`. |
