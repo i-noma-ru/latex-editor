@@ -1,13 +1,21 @@
 # latex-editor
 
-A local web editor for LaTeX: file tree, editor, and PDF preview in a single browser tab. Saving a `.tex` file compiles it using your local TeX installation and reloads the PDF. Everything runs on `127.0.0.1`; no data leaves your machine.
+A local web editor for LaTeX: file tree, editor, and PDF preview in a single browser tab. Saving a `.tex` file compiles it using your local TeX installation and reloads the PDF.
+Everything runs on `127.0.0.1` and the server needs nothing beyond Node.js and your TeX installation, so it works offline and no data leaves your machine.
 
 日本語の説明は [README.ja.md](README.ja.md) にあります。The UI text is in Japanese.
 
-- Uses only Node.js built-in modules on the server. CodeMirror 5 and PDF.js are bundled in `vendor/`, so it works offline without running `npm install`.
-- PDFs and build artifacts (`.aux`, `.log`, `.synctex.gz`) are written to a separate build directory, never next to your `.tex` files. This keeps synced or version-controlled directories clean.
-- Bidirectional SyncTeX support: click the PDF to jump to the source line, or press a shortcut to jump from the cursor to the PDF.
-- Detects external file changes and prevents accidental overwrites.
+## When to use
+
+- When your `.tex` files live in a synced or version-controlled folder and you do not want PDFs, `.aux`, `.log`, or `.synctex.gz` written next to them. Build artifacts go to a separate build directory.
+- When you want to click a spot in the PDF and land on the source line, or jump from the cursor to the PDF (bidirectional SyncTeX), without leaving the browser tab.
+- When the same `.tex` files are also edited on another PC or in another editor, and you want a warning instead of a silent overwrite.
+
+Not for you if your documents need `uplatex` or `platex` (they output DVI, not PDF), if you rely on BibTeX, biber, or makeindex, or if more than one person needs to reach the editor.
+
+## What it looks like
+
+Run `start.js` in the folder that holds your `.tex` files; the terminal prints `サーバーを起動しました。` and `http://127.0.0.1:8940` opens in your browser. Click a file in the tree and press `Cmd+S` / `Ctrl+S`: the status line goes from `⟳ コンパイル中` to `✓ 保存済み` and the PDF preview appears on the right, or shows `⚠️ コンパイル失敗` if the compile fails. When another program changes the open file, a banner reads `このファイルは外部（別の PC・エディタ等）で更新されました` with a `再読込してコンパイル` button.
 
 ## Requirements
 
@@ -16,6 +24,10 @@ A local web editor for LaTeX: file tree, editor, and PDF preview in a single bro
 - **`uplatex` and `platex` are not supported.** They output DVI files rather than PDFs, so every compile is reported as failed.
 
 The editor has been used on macOS and Windows as part of the author's personal setup. This standalone version, featuring its own compile step (`compile.js`), has been tested on macOS only.
+
+## Install
+
+There is no install step. The server uses only Node.js built-in modules, and CodeMirror 5 and PDF.js are bundled in `vendor/`, so it works offline without running `npm install`. Go straight to the commands below.
 
 ## Run
 
